@@ -1,102 +1,229 @@
-function refreshWeather(response) {
-  let temperatureElement = document.querySelector("#temperature");
-  let temperature = response.data.temperature.current;
-  let cityElement = document.querySelector("#city");
-  let descriptionElement = document.querySelector("#description");
-  let humidityElement = document.querySelector("#humidity");
-  let windSpeedElement = document.querySelector("#wind-speed");
-  let timeElement = document.querySelector("#time");
-  let date = new Date(response.data.time * 1000);
-  let iconElement = document.querySelector("#icon");
+(function () {
+  //global selectors
+  let mainImageUrl;
+  let unit = "metric";
+  let celsiusTemp = null;
+  let apiKey = "a4f791ec3190105377dcfdf1cf72f27d";
+  let apiEndPoint = "https://api.openweathermap.org/data/2.5/weather?";
 
-  cityElement.innerHTML = response.data.city;
-  timeElement.innerHTML = formatDate(date);
-  descriptionElement.innerHTML = response.data.condition.description;
-  humidityElement.innerHTML = `${response.data.temperature.humidity}%`;
-  windSpeedElement.innerHTML = `${response.data.wind.speed}km/h`;
-  temperatureElement.innerHTML = Math.round(temperature);
-  iconElement.innerHTML = `<img src="${response.data.condition.icon_url}" class="weather-app-icon" />`;
+  //get elements from HTML
+  let temperatureElement = document.querySelector("#current-temperature");
+  let cityElement = document.querySelector("#current-city");
+  let descriptionElement = document.querySelector("#weather-description");
+  let humidity = document.querySelector("#humidity");
+  let windElement = document.querySelector("#wind-speed");
+  let dateElement = document.querySelector("#current-time");
+  let cityInput = document.querySelector("#search-input");
+  let iconElement = document.querySelector("#primary-icon");
+  let mainImage = document.querySelector("#main-illustration");
+  let fahrenheitLink = document.querySelector("#degreesFahr");
+  let celsiusLink = document.querySelector("#degreesCelsius");
+  let form = document.querySelector("#search-form");
+  let tempElement = document.querySelector("#current-temperature");
+  let cityName = document.querySelector(".city-not-found");
+  let currentLocationIcon = document.querySelector("#current-location-addon");
 
-  getForecast(response.data.city);
-}
-
-function formatDate(date) {
-  let minutes = date.getMinutes();
-  let hours = date.getHours();
-  let days = [
-    "Sunday",
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday",
-    "Saturday",
-  ];
-  let day = days[date.getDay()];
-
-  if (minutes < 10) {
-    minutes = `0${minutes}`;
+  //get Last updated date
+  function formatDate(timestamp) {
+    let date = new Date(timestamp);
+    let days = [
+      "Sunday",
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturtday",
+    ];
+    let day = days[date.getDay()];
+    return `Last updated <br/> ${day} ${formatHours(timestamp)}`;
   }
 
-  return `${day} ${hours}:${minutes}`;
-}
-
-function searchCity(city) {
-  let apiKey = "b2a5adcct04b33178913oc335f405433";
-  let apiUrl = `https://api.shecodes.io/weather/v1/current?query=${city}&key=${apiKey}&units=metric`;
-  axios.get(apiUrl).then(refreshWeather);
-}
-
-function handleSearchSubmit(event) {
-  event.preventDefault();
-  let searchInput = document.querySelector("#search-form-input");
-
-  searchCity(searchInput.value);
-}
-
-function formatDay(timestamp) {
-  let date = new Date(timestamp * 1000);
-  let days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-  return days[date.getDay()];
-}
-
-function getForecast(city) {
-  let apiKey = "b2a5adcct04b33178913oc335f405433";
-  let apiUrl = `https://api.shecodes.io/weather/v1/forecast?query=${city}&key=${apiKey}&units=metric`;
-  axios(apiUrl).then(displayForecast);
-}
-
-function displayForecast(response) {
-  let forecastHtml = "";
-
-  response.data.daily.forEach(function (day, index) {
-    if (index < 5) {
-      forecastHtml =
-        forecastHtml +
-        `
-      <div class="weather-forecast-day">
-        <div class="weather-forecast-date">${formatDay(day.time)}</div>
-
-        <img src="${day.condition.icon_url}" class="weather-forecast-icon" />
-        <div class="weather-forecast-temperatures">
-          <div class="weather-forecast-temperature">
-            <strong>${Math.round(day.temperature.maximum)}º</strong>
-          </div>
-          <div class="weather-forecast-temperature">${Math.round(
-            day.temperature.minimum
-          )}º</div>
-        </div>
-      </div>
-    `;
+  //format hours
+  function formatHours(timestamp) {
+    let date = new Date(timestamp);
+    let hours = date.getHours();
+    if (hours < 10) {
+      hours = `0${hours}`;
     }
-  });
+    let minutes = date.getMinutes();
+    if (minutes < 10) {
+      minutes = `0${minutes}`;
+    }
+    return `${hours}:${minutes}`;
+  }
 
-  let forecastElement = document.querySelector("#forecast");
-  forecastElement.innerHTML = forecastHtml;
-}
+  //display temperature
+  function showTemperature(response) {
+    //get API data
+    celsiusTemp = response.data.main.temp;
+    temperatureElement.innerHTML = Math.round(celsiusTemp);
+    cityElement.innerHTML = response.data.name;
+    descriptionElement.innerHTML = response.data.weather[0].description;
+    humidity.innerHTML = `${response.data.main.humidity} %`;
+    windElement.innerHTML = Math.round(response.data.wind.speed) + " km/h";
+    dateElement.innerHTML = formatDate(response.data.dt * 1000);
+  }
 
-let searchFormElement = document.querySelector("#search-form");
-searchFormElement.addEventListener("submit", handleSearchSubmit);
+  //get the weather from user location
+  function getWeatherDataFromCoords(position) {
+    let lat = position.coords.latitude;
+    let lon = position.coords.longitude;
+    let apiUrl = `${apiEndPoint}lat=${lat}&lon=${lon}&appid=${apiKey}&units=${unit}`;
 
-searchCity("Paris");
+    axios.get(apiUrl).then((response) => {
+      showTemperature(response);
+      getweatherImage(response);
+      apiUrl = `https://api.openweathermap.org/data/2.5/forecast?q=${response.data.name}&appid=${apiKey}&units=${unit}`;
+      axios.get(apiUrl).then(displayForecast);
+    });
+  }
+
+  //get current location
+  function setTempToCurrentLocation() {
+    navigator.geolocation.getCurrentPosition(getWeatherDataFromCoords);
+  }
+
+  // get related weather image and icon
+  function getweatherImage(response) {
+    let temp = response.data.main.temp;
+    let iconCode = response.data.weather[0].icon;
+    let iconURL = "./images/icons/" + iconCode + ".png";
+    iconElement.setAttribute("src", iconURL);
+    iconElement.setAttribute("alt", response.data.weather[0].description);
+    let changeImage = () => mainImage.setAttribute("src", mainImageUrl);
+    let cloudyIcons = ["02d", "02n", "03d", "03n", "04d", "04n"];
+    let rainyIcons = ["09d", "09n", "10d", "10n"];
+    let thunderIcons = ["11d", "11n"];
+    let snowIcons = ["13d", "13n"];
+    let mistIcons = ["50d", "50n"];
+
+    //change illustration based on weather
+    switch (iconCode) {
+      case "01d":
+        if (temp < -1) {
+          mainImageUrl = "./images/illustrations/cold.png";
+        } else {
+          mainImageUrl = "./images/illustrations/sunny.png";
+        }
+        changeImage();
+        break;
+      case "01n":
+        if (temp < -1) {
+          mainImageUrl = "./images/illustrations/cold.png";
+        } else {
+          mainImageUrl = "./images/illustrations/night.png";
+        }
+        changeImage();
+        break;
+      case cloudyIcons[0]:
+      case cloudyIcons[1]:
+      case cloudyIcons[2]:
+      case cloudyIcons[3]:
+      case cloudyIcons[4]:
+      case cloudyIcons[5]:
+        if (temp < -1) {
+          mainImageUrl = "./images/illustrations/cold.png";
+        } else {
+          mainImageUrl = "./images/illustrations/cloudy.png";
+        }
+        changeImage();
+        break;
+      case rainyIcons[0]:
+      case rainyIcons[1]:
+      case rainyIcons[2]:
+      case rainyIcons[3]:
+        mainImageUrl = "./images/illustrations/rain.png";
+        changeImage();
+        break;
+      case thunderIcons[0]:
+      case thunderIcons[1]:
+        mainImageUrl = "./images/illustrations/thunder.png";
+        changeImage();
+        break;
+      case snowIcons[0]:
+      case snowIcons[1]:
+        mainImageUrl = "./images/illustrations/snow.png";
+        changeImage();
+        break;
+      case mistIcons[0]:
+      case mistIcons[1]:
+        if (temp < -1) {
+          mainImageUrl = "./images/illustrations/cold.png";
+        } else {
+          mainImageUrl = "./images/illustrations/misty.png";
+        }
+        changeImage();
+        break;
+    }
+  }
+
+  //get city input value
+  function handleSubmit(event) {
+    event.preventDefault();
+    search(cityInput.value);
+  }
+
+  //get additonal forecast data from API
+  function displayForecast(response) {
+    let forecast = null;
+    let forecastElement = document.querySelector("#forecast");
+    forecastElement.innerHTML = null;
+    for (let index = 0; index < 4; index++) {
+      forecast = response.data.list[index];
+      let maxTemp = `${Math.round(forecast.main.temp_max)}`;
+      forecastElement.innerHTML += `
+<div class="col-3">
+    <span class="additional-time">${formatHours(forecast.dt * 1000)}</span>
+    <img class="weather-icon" src="./images/icons/${
+      forecast.weather[0].icon
+    }.png" alt="sun">
+    <span class="additonal-degree-info">max ${maxTemp}°</span>
+</div>`;
+    }
+  }
+
+  function search(city) {
+    let apiUrl = `${apiEndPoint}q=${city}&appid=${apiKey}&units=${unit}`;
+    axios
+      .get(apiUrl)
+      .then((response) => {
+        cityName.innerHTML = "";
+        showTemperature(response);
+        getweatherImage(response);
+      })
+      .catch(function (error) {
+        if (error.response.status === 404) {
+          cityName.innerHTML =
+            "Woops, we could not find this place, try another city";
+        }
+      });
+    apiUrl = `https://api.openweathermap.org/data/2.5/forecast?q=${city}&appid=${apiKey}&units=${unit}`;
+    axios.get(apiUrl).then(displayForecast);
+  }
+
+  //convert  to farh units
+  function showFahrTemp(event) {
+    event.preventDefault();
+    let fahrTemp = (celsiusTemp * 9) / 5 + 32;
+    tempElement.innerHTML = Math.round(fahrTemp);
+    //remove the active class celsius link
+    celsiusLink.classList.remove("active");
+    fahrenheitLink.classList.add("active");
+  }
+
+  //convert  to celsius units
+  function showCelsiusTemp(event) {
+    event.preventDefault();
+    tempElement.innerHTML = Math.round(celsiusTemp);
+    celsiusLink.classList.add("active");
+    fahrenheitLink.classList.remove("active");
+  }
+
+  //Add event listener
+  fahrenheitLink.addEventListener("click", showFahrTemp);
+  celsiusLink.addEventListener("click", showCelsiusTemp);
+  form.addEventListener("submit", handleSubmit);
+  currentLocationIcon.addEventListener("click", setTempToCurrentLocation);
+  search("London");
+})();
